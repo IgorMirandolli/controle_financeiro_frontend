@@ -9,19 +9,26 @@ const state = {
   online: false,
   categories: [],
   transactions: [],
+  charts: {
+    monthly: null,
+    category: null
+  },
   filters: {
     startDate: '',
     endDate: '',
     categoryId: ''
   },
   editingTransactionId: null,
-  lastSyncMessage: 'Aguardando sincronizacao'
+  lastSyncMessage: 'Aguardando sincronizacao',
+  chartDefaultsConfigured: false
 };
 
 const elements = {
   summaryCards: document.getElementById('summaryCards'),
   monthlyChart: document.getElementById('monthlyChart'),
+  monthlyChartNote: document.getElementById('monthlyChartNote'),
   categoryChart: document.getElementById('categoryChart'),
+  categoryChartNote: document.getElementById('categoryChartNote'),
   transactionsList: document.getElementById('transactionsList'),
   apiStatus: document.getElementById('apiStatus'),
   sidebarStatus: document.getElementById('sidebarStatus'),
@@ -323,6 +330,24 @@ function buildExpenseCategories(transactions = []) {
     .sort((left, right) => right.total - left.total);
 }
 
+function ensureChartDefaults() {
+  if (typeof Chart === 'undefined' || state.chartDefaultsConfigured) {
+    return;
+  }
+
+  Chart.defaults.font.family = 'Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+  Chart.defaults.color = '#5b6475';
+  Chart.defaults.borderColor = 'rgba(148, 163, 184, 0.2)';
+  state.chartDefaultsConfigured = true;
+}
+
+function destroyChart(chartKey) {
+  if (state.charts[chartKey]) {
+    state.charts[chartKey].destroy();
+    state.charts[chartKey] = null;
+  }
+}
+
 function setStatus(message, tone = 'ok') {
   elements.apiStatus.innerHTML = `
     <div class="status-chip ${tone}">${escapeHtml(state.online ? 'API conectada' : 'Modo demonstracao')}</div>
@@ -373,83 +398,188 @@ function renderSummaryCards(transactions) {
 
 function renderMonthlyChart(transactions) {
   const series = buildMonthlySeries(transactions);
-  const maxValue = Math.max(
-    1,
-    ...series.map((item) => Math.max(item.income, item.expenses, 0))
-  );
+  elements.monthlyChartNote.textContent = `Baseado em ${transactions.length} lancamentos visiveis.`;
 
-  elements.monthlyChart.innerHTML = `
-    <div class="chart-legend">
-      <span class="legend-item"><span class="legend-swatch legend-income"></span>Receitas</span>
-      <span class="legend-item"><span class="legend-swatch legend-expense"></span>Despesas</span>
-    </div>
-    <div class="chart-grid">
-      ${series
-        .map((item) => {
-          const incomeHeight = Math.max((item.income / maxValue) * 100, item.income > 0 ? 8 : 0);
-          const expenseHeight = Math.max((item.expenses / maxValue) * 100, item.expenses > 0 ? 8 : 0);
+  if (typeof Chart === 'undefined') {
+    elements.monthlyChartNote.textContent =
+      'Chart.js nao carregou. Recarregue a pagina quando a biblioteca estiver disponivel.';
+    destroyChart('monthly');
+    return;
+  }
 
-          return `
-            <div class="chart-column">
-              <div class="chart-bars">
-                <div class="chart-bar-group" title="Receitas ${item.label}: ${formatCurrency(item.income)}">
-                  <div class="chart-bar chart-bar-income" style="height: ${incomeHeight}%"></div>
-                  <div class="chart-value">${formatCurrency(item.income)}</div>
-                </div>
-                <div class="chart-bar-group" title="Despesas ${item.label}: ${formatCurrency(item.expenses)}">
-                  <div class="chart-bar chart-bar-expense" style="height: ${expenseHeight}%"></div>
-                  <div class="chart-value">${formatCurrency(item.expenses)}</div>
-                </div>
-              </div>
-              <div class="chart-label">${escapeHtml(item.label)}</div>
-            </div>
-          `;
-        })
-        .join('')}
-    </div>
-    <p class="chart-note">Baseado em ${transactions.length} lancamentos visiveis.</p>
-  `;
+  ensureChartDefaults();
+
+  const labels = series.map((item) => item.label);
+  const incomeData = series.map((item) => item.income);
+  const expenseData = series.map((item) => item.expenses);
+
+  const chartConfig = {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Entradas',
+          data: incomeData,
+          backgroundColor: 'rgba(37, 99, 235, 0.82)',
+          borderColor: 'rgba(37, 99, 235, 1)',
+          borderWidth: 0,
+          borderRadius: 8,
+          borderSkipped: false,
+          maxBarThickness: 28
+        },
+        {
+          label: 'Saidas',
+          data: expenseData,
+          backgroundColor: 'rgba(239, 68, 68, 0.8)',
+          borderColor: 'rgba(239, 68, 68, 1)',
+          borderWidth: 0,
+          borderRadius: 8,
+          borderSkipped: false,
+          maxBarThickness: 28
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: {
+        mode: 'index',
+        intersect: false
+      },
+      plugins: {
+        legend: {
+          position: 'top',
+          align: 'start',
+          labels: {
+            usePointStyle: true,
+            pointStyle: 'circle',
+            boxWidth: 10,
+            boxHeight: 10
+          }
+        },
+        tooltip: {
+          callbacks: {
+            label(context) {
+              return `${context.dataset.label}: ${formatCurrency(context.parsed.y || 0)}`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: {
+            display: false
+          }
+        },
+        y: {
+          beginAtZero: true,
+          ticks: {
+            callback(value) {
+              return formatCurrency(Number(value) || 0);
+            }
+          }
+        }
+      }
+    }
+  };
+
+  if (state.charts.monthly) {
+    state.charts.monthly.data.labels = labels;
+    state.charts.monthly.data.datasets[0].data = incomeData;
+    state.charts.monthly.data.datasets[1].data = expenseData;
+    state.charts.monthly.update();
+    return;
+  }
+
+  state.charts.monthly = new Chart(elements.monthlyChart, chartConfig);
 }
 
 function renderCategoryChart(transactions) {
   const categories = buildExpenseCategories(transactions);
-  const maxValue = Math.max(1, ...categories.map((category) => category.total));
+  elements.categoryChartNote.textContent = categories.length
+    ? `${categories.length} categorias com despesas no periodo filtrado.`
+    : 'Sem despesas no periodo selecionado.';
 
-  if (!categories.length) {
-    elements.categoryChart.innerHTML = `
-      <div class="empty-state">
-        <strong>Sem despesas no periodo</strong>
-        <p class="empty-note">Use os filtros para comparar categorias ou inclua lancamentos de despesa.</p>
-      </div>
-    `;
+  if (typeof Chart === 'undefined') {
+    elements.categoryChartNote.textContent =
+      'Chart.js nao carregou. Recarregue a pagina quando a biblioteca estiver disponivel.';
+    destroyChart('category');
     return;
   }
 
-  elements.categoryChart.innerHTML = `
-    <div class="category-list">
-      ${categories
-        .map((category) => {
-          const width = Math.max((category.total / maxValue) * 100, 8);
+  ensureChartDefaults();
 
-          return `
-            <div class="category-row">
-              <div class="category-copy">
-                <div class="category-head">
-                  <span class="category-dot" style="background: ${escapeHtml(category.color)}"></span>
-                  <p class="category-name">${escapeHtml(category.name)}</p>
-                </div>
-                <p class="category-meta">${escapeHtml(typeLabel(category.type))} com maior concentracao</p>
-                <div class="progress">
-                  <div class="progress-fill" style="width: ${width}%; background: ${escapeHtml(category.color)}"></div>
-                </div>
-              </div>
-              <div class="transaction-amount amount-expense">${formatCurrency(category.total)}</div>
-            </div>
-          `;
-        })
-        .join('')}
-    </div>
-  `;
+  if (!categories.length) {
+    destroyChart('category');
+    return;
+  }
+
+  const labels = categories.map((category) => category.name);
+  const values = categories.map((category) => category.total);
+  const colors = categories.map((category) => category.color);
+
+  const chartConfig = {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Gasto por categoria',
+          data: values,
+          backgroundColor: colors.map((color) => `${color}CC`),
+          borderColor: colors,
+          borderWidth: 0,
+          borderRadius: 8,
+          borderSkipped: false,
+          maxBarThickness: 26
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      indexAxis: 'y',
+      plugins: {
+        legend: {
+          display: false
+        },
+        tooltip: {
+          callbacks: {
+            label(context) {
+              return `${context.label}: ${formatCurrency(context.parsed.x || 0)}`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          beginAtZero: true,
+          ticks: {
+            callback(value) {
+              return formatCurrency(Number(value) || 0);
+            }
+          }
+        },
+        y: {
+          grid: {
+            display: false
+          }
+        }
+      }
+    }
+  };
+
+  if (state.charts.category) {
+    state.charts.category.data.labels = labels;
+    state.charts.category.data.datasets[0].data = values;
+    state.charts.category.data.datasets[0].backgroundColor = colors.map((color) => `${color}CC`);
+    state.charts.category.data.datasets[0].borderColor = colors;
+    state.charts.category.update();
+    return;
+  }
+
+  state.charts.category = new Chart(elements.categoryChart, chartConfig);
 }
 
 function renderTransactions(transactions) {

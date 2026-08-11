@@ -408,6 +408,24 @@ select {
   gap: 12px;
 }
 
+.chart-frame {
+  position: relative;
+  height: 320px;
+  min-width: 0;
+}
+
+.chart-frame canvas {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+}
+
+.chart-note {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
 .transaction-card,
 .category-row {
   display: grid;
@@ -600,12 +618,6 @@ select {
   text-align: center;
 }
 
-.chart-note {
-  margin: 12px 0 0;
-  color: var(--muted);
-  font-size: 0.88rem;
-}
-
 .category-row {
   align-items: center;
 }
@@ -742,6 +754,10 @@ select {
   .chart-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+
+  .chart-frame {
+    height: 280px;
+  }
 }
 
 @media (max-width: 720px) {
@@ -774,10 +790,18 @@ select {
   .chart-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .chart-frame {
+    height: 260px;
+  }
 }
 
 @media (max-width: 520px) {
   .chart-grid {
     grid-template-columns: 1fr;
+  }
+
+  .chart-frame {
+    height: 240px;
   }
 }
