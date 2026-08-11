@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Controle Financeiro</title>
+    <link rel="stylesheet" href="css/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div>
+          <p class="sidebar-kicker">Projeto portfólio</p>
+          <h1>Controle Financeiro</h1>
+          <p class="sidebar-text">
+            Receitas, despesas, categorias, saldo e gráficos em um dashboard simples.
+          </p>
+        </div>
+
+        <nav class="sidebar-nav" aria-label="Seções do projeto">
+          <button class="nav-item active" type="button">Dashboard</button>
+          <button class="nav-item" type="button">Receitas</button>
+          <button class="nav-item" type="button">Despesas</button>
+          <button class="nav-item" type="button">Categorias</button>
+        </nav>
+
+        <div class="sidebar-footer">
+          <span class="status-dot"></span>
+          <span id="sidebarStatus">API aguardando resposta</span>
+        </div>
+      </aside>
+
+      <main class="main">
+        <header class="page-header">
+          <div>
+            <p class="section-kicker">Resumo do mês</p>
+            <h2>Saldo, receitas, despesas e gráficos</h2>
+          </div>
+          <button id="refreshButton" class="button button-primary" type="button">
+            Atualizar dados
+          </button>
+        </header>
+
+        <section class="summary-grid" id="summaryCards" aria-label="Indicadores principais"></section>
+
+        <section class="content-grid">
+          <article class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="section-kicker">Gráfico</p>
+                <h3>Evolução mensal</h3>
+              </div>
+            </div>
+            <div class="chart chart-monthly" id="monthlyChart"></div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="section-kicker">Categorias</p>
+                <h3>Despesas por grupo</h3>
+              </div>
+            </div>
+            <div class="category-list" id="categoryChart"></div>
+          </article>
+        </section>
+
+        <section class="content-grid">
+          <article class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="section-kicker">Movimentações</p>
+                <h3>Transações recentes</h3>
+              </div>
+            </div>
+            <div class="transaction-list" id="transactionsList"></div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="section-kicker">Integração</p>
+                <h3>Status da API</h3>
+              </div>
+            </div>
+            <div class="status-panel" id="apiStatus">Carregando dados...</div>
+          </article>
+        </section>
+      </main>
+    </div>
+
+    <script src="js/app.js"></script>
+  </body>
+</html>
