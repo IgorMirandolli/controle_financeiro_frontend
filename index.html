@@ -10,14 +10,14 @@
     <div class="app-shell">
       <aside class="sidebar">
         <div>
-          <p class="sidebar-kicker">Projeto portfólio</p>
+          <p class="sidebar-kicker">Projeto portfolio</p>
           <h1>Controle Financeiro</h1>
           <p class="sidebar-text">
-            Receitas, despesas, categorias, saldo e gráficos em um dashboard simples.
+            Receitas, despesas, categorias, saldo e graficos em um dashboard simples.
           </p>
         </div>
 
-        <nav class="sidebar-nav" aria-label="Seções do projeto">
+        <nav class="sidebar-nav" aria-label="Secoes do projeto">
           <button class="nav-item active" type="button">Dashboard</button>
           <button class="nav-item" type="button">Receitas</button>
           <button class="nav-item" type="button">Despesas</button>
@@ -33,9 +33,10 @@
       <main class="main">
         <header class="page-header">
           <div>
-            <p class="section-kicker">Resumo do mês</p>
-            <h2>Saldo, receitas, despesas e gráficos</h2>
+            <p class="section-kicker">Resumo do periodo</p>
+            <h2>Dashboard financeiro</h2>
           </div>
+
           <button id="refreshButton" class="button button-primary" type="button">
             Atualizar dados
           </button>
@@ -43,48 +44,149 @@
 
         <section class="summary-grid" id="summaryCards" aria-label="Indicadores principais"></section>
 
-        <section class="content-grid">
-          <article class="panel">
-            <div class="panel-header">
-              <div>
-                <p class="section-kicker">Gráfico</p>
-                <h3>Evolução mensal</h3>
-              </div>
+        <section class="filters-bar panel">
+          <div class="filters-head">
+            <div>
+              <p class="section-kicker">Filtros</p>
+              <h3>Refine os lancamentos visiveis</h3>
             </div>
-            <div class="chart chart-monthly" id="monthlyChart"></div>
-          </article>
+            <button id="clearFiltersButton" class="button button-secondary" type="button">
+              Limpar filtros
+            </button>
+          </div>
 
-          <article class="panel">
-            <div class="panel-header">
-              <div>
-                <p class="section-kicker">Categorias</p>
-                <h3>Despesas por grupo</h3>
-              </div>
-            </div>
-            <div class="category-list" id="categoryChart"></div>
-          </article>
+          <div class="filters-grid">
+            <label class="field">
+              <span>Data inicial</span>
+              <input id="filterStartDate" type="date" />
+            </label>
+
+            <label class="field">
+              <span>Data final</span>
+              <input id="filterEndDate" type="date" />
+            </label>
+
+            <label class="field field-wide">
+              <span>Categoria</span>
+              <select id="filterCategory"></select>
+            </label>
+          </div>
+
+          <p id="filterSummary" class="filter-summary">Carregando filtros...</p>
         </section>
 
-        <section class="content-grid">
-          <article class="panel">
-            <div class="panel-header">
-              <div>
-                <p class="section-kicker">Movimentações</p>
-                <h3>Transações recentes</h3>
+        <section class="dashboard-grid">
+          <div class="dashboard-main">
+            <article class="panel">
+              <div class="panel-header">
+                <div>
+                  <p class="section-kicker">Lancamentos</p>
+                  <h3>Criar ou editar</h3>
+                </div>
+                <span id="formModeBadge" class="panel-count">Novo lancamento</span>
               </div>
-            </div>
-            <div class="transaction-list" id="transactionsList"></div>
-          </article>
 
-          <article class="panel">
-            <div class="panel-header">
-              <div>
-                <p class="section-kicker">Integração</p>
-                <h3>Status da API</h3>
+              <form id="transactionForm" class="transaction-form" novalidate>
+                <input type="hidden" id="transactionId" />
+
+                <label class="field">
+                  <span>Tipo</span>
+                  <select id="transactionType" required>
+                    <option value="income">Receita</option>
+                    <option value="expense">Despesa</option>
+                  </select>
+                </label>
+
+                <label class="field">
+                  <span>Categoria</span>
+                  <select id="transactionCategoryId" required></select>
+                </label>
+
+                <label class="field field-wide">
+                  <span>Descricao</span>
+                  <input
+                    id="transactionDescription"
+                    type="text"
+                    maxlength="180"
+                    placeholder="Ex: salario, aluguel, transporte..."
+                    required
+                  />
+                </label>
+
+                <label class="field">
+                  <span>Valor</span>
+                  <input
+                    id="transactionAmount"
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    placeholder="0,00"
+                    required
+                  />
+                </label>
+
+                <label class="field">
+                  <span>Data</span>
+                  <input id="transactionDate" type="date" required />
+                </label>
+
+                <div class="form-actions field-wide">
+                  <p id="formHint" class="form-hint">Preencha o formulario para criar um lancamento.</p>
+                  <div class="button-row">
+                    <button id="cancelEditButton" class="button button-secondary" type="button" hidden>
+                      Cancelar edicao
+                    </button>
+                    <button id="saveTransactionButton" class="button button-primary" type="submit">
+                      Salvar lancamento
+                    </button>
+                  </div>
+                </div>
+              </form>
+            </article>
+
+            <article class="panel">
+              <div class="panel-header">
+                <div>
+                  <p class="section-kicker">Movimentacoes</p>
+                  <h3>Lancamentos recentes</h3>
+                </div>
+                <span id="transactionsCount" class="panel-count">0 itens</span>
               </div>
-            </div>
-            <div class="status-panel" id="apiStatus">Carregando dados...</div>
-          </article>
+              <div class="transaction-list" id="transactionsList"></div>
+            </article>
+          </div>
+
+          <div class="dashboard-side">
+            <article class="panel">
+              <div class="panel-header">
+                <div>
+                  <p class="section-kicker">Grafico</p>
+                  <h3>Evolucao mensal</h3>
+                </div>
+              </div>
+              <div id="monthlyChart" class="chart chart-monthly"></div>
+            </article>
+
+            <article class="panel">
+              <div class="panel-header">
+                <div>
+                  <p class="section-kicker">Categorias</p>
+                  <h3>Despesas por grupo</h3>
+                </div>
+              </div>
+              <div id="categoryChart" class="category-list"></div>
+            </article>
+
+            <article class="panel">
+              <div class="panel-header">
+                <div>
+                  <p class="section-kicker">Integracao</p>
+                  <h3>Status da API</h3>
+                </div>
+              </div>
+              <div id="apiStatus" class="status-panel">Carregando dados...</div>
+            </article>
+          </div>
         </section>
       </main>
     </div>
