@@ -13,15 +13,15 @@
           <p class="sidebar-kicker">Projeto portfolio</p>
           <h1>Controle Financeiro</h1>
           <p class="sidebar-text">
-            Receitas, despesas, categorias, saldo e graficos em um dashboard simples.
+            Acompanhe entradas, saidas, saldo e categorias em uma tela simples de usar.
           </p>
         </div>
 
         <nav class="sidebar-nav" aria-label="Secoes do projeto">
-          <button class="nav-item active" type="button">Dashboard</button>
-          <button class="nav-item" type="button">Receitas</button>
-          <button class="nav-item" type="button">Despesas</button>
-          <button class="nav-item" type="button">Categorias</button>
+          <button class="nav-item active" type="button" data-nav="dashboard">Dashboard</button>
+          <button class="nav-item" type="button" data-nav="income">Receitas</button>
+          <button class="nav-item" type="button" data-nav="expense">Despesas</button>
+          <button class="nav-item" type="button" data-nav="categories">Categorias</button>
         </nav>
 
         <div class="sidebar-footer">
@@ -33,14 +33,16 @@
       <main class="main">
         <header class="page-header">
           <div>
-            <p class="section-kicker">Resumo do periodo</p>
-            <h2>Dashboard financeiro</h2>
+            <p class="section-kicker">Visao geral</p>
+            <h2>Resumo financeiro</h2>
           </div>
 
           <button id="refreshButton" class="button button-primary" type="button">
-            Atualizar dados
+            Recarregar
           </button>
         </header>
+
+        <div id="pageBanner" class="page-banner" hidden></div>
 
         <section class="summary-grid" id="summaryCards" aria-label="Indicadores principais"></section>
 
@@ -48,7 +50,7 @@
           <div class="filters-head">
             <div>
               <p class="section-kicker">Filtros</p>
-              <h3>Refine os lancamentos visiveis</h3>
+              <h3>Ajuste o periodo e a categoria</h3>
             </div>
             <button id="clearFiltersButton" class="button button-secondary" type="button">
               Limpar filtros
@@ -77,11 +79,11 @@
 
         <section class="dashboard-grid">
           <div class="dashboard-main">
-            <article class="panel">
+            <article class="panel" id="transactionFormPanel">
               <div class="panel-header">
                 <div>
                   <p class="section-kicker">Lancamentos</p>
-                  <h3>Criar ou editar</h3>
+                  <h3>Novo ou editar lancamento</h3>
                 </div>
                 <span id="formModeBadge" class="panel-count">Novo lancamento</span>
               </div>
@@ -144,11 +146,11 @@
               </form>
             </article>
 
-            <article class="panel">
+            <article class="panel" id="transactionsPanel">
               <div class="panel-header">
                 <div>
                   <p class="section-kicker">Movimentacoes</p>
-                  <h3>Lancamentos recentes</h3>
+                  <h3>Ultimos lancamentos</h3>
                 </div>
                 <span id="transactionsCount" class="panel-count">0 itens</span>
               </div>
@@ -157,12 +159,22 @@
           </div>
 
           <div class="dashboard-side">
-            <article class="panel">
+            <article class="panel" id="monthlyChartPanel">
               <div class="panel-header">
                 <div>
                   <p class="section-kicker">Grafico</p>
                   <h3>Entradas e saidas mensais</h3>
                 </div>
+              </div>
+              <div class="chart-legend" aria-hidden="true">
+                <span class="legend-item">
+                  <span class="legend-swatch legend-income"></span>
+                  Entradas
+                </span>
+                <span class="legend-item">
+                  <span class="legend-swatch legend-expense"></span>
+                  Saidas
+                </span>
               </div>
               <div class="chart-frame">
                 <canvas id="monthlyChart" aria-label="Grafico mensal de entradas e saidas" role="img"></canvas>
@@ -170,7 +182,7 @@
               <p id="monthlyChartNote" class="chart-note"></p>
             </article>
 
-            <article class="panel">
+            <article class="panel" id="categoryPanel">
               <div class="panel-header">
                 <div>
                   <p class="section-kicker">Categorias</p>
@@ -187,7 +199,7 @@
               <div class="panel-header">
                 <div>
                   <p class="section-kicker">Integracao</p>
-                  <h3>Status da API</h3>
+                  <h3>Conexao com a API</h3>
                 </div>
               </div>
               <div id="apiStatus" class="status-panel">Carregando dados...</div>

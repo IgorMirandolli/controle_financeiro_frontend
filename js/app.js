@@ -6,7 +6,9 @@ const currencyFormatter = new Intl.NumberFormat('pt-BR', {
 const API_BASE_URL = window.location.protocol === 'file:' ? 'http://localhost:3000/api' : '/api';
 
 const state = {
+  loadState: 'loading',
   online: false,
+  source: 'api',
   categories: [],
   transactions: [],
   charts: {
@@ -18,12 +20,16 @@ const state = {
     endDate: '',
     categoryId: ''
   },
+  activeNav: 'dashboard',
   editingTransactionId: null,
   lastSyncMessage: 'Aguardando sincronizacao',
+  lastErrorMessage: '',
   chartDefaultsConfigured: false
 };
 
 const elements = {
+  pageBanner: document.getElementById('pageBanner'),
+  navItems: Array.from(document.querySelectorAll('.nav-item')),
   summaryCards: document.getElementById('summaryCards'),
   monthlyChart: document.getElementById('monthlyChart'),
   monthlyChartNote: document.getElementById('monthlyChartNote'),
@@ -49,7 +55,11 @@ const elements = {
   cancelEditButton: document.getElementById('cancelEditButton'),
   saveTransactionButton: document.getElementById('saveTransactionButton'),
   formHint: document.getElementById('formHint'),
-  formModeBadge: document.getElementById('formModeBadge')
+  formModeBadge: document.getElementById('formModeBadge'),
+  transactionFormPanel: document.getElementById('transactionFormPanel'),
+  transactionsPanel: document.getElementById('transactionsPanel'),
+  monthlyChartPanel: document.getElementById('monthlyChartPanel'),
+  categoryPanel: document.getElementById('categoryPanel')
 };
 
 function escapeHtml(value) {
@@ -348,20 +358,138 @@ function destroyChart(chartKey) {
   }
 }
 
-function setStatus(message, tone = 'ok') {
+function setPageBanner(kind, title, message, detail) {
+  if (!title && !message) {
+    elements.pageBanner.hidden = true;
+    elements.pageBanner.innerHTML = '';
+    return;
+  }
+
+  const detailMarkup = detail ? `<p class="page-banner-detail">${escapeHtml(detail)}</p>` : '';
+
+  elements.pageBanner.hidden = false;
+  elements.pageBanner.className = `page-banner page-banner-${kind}`;
+  elements.pageBanner.innerHTML = `
+    <strong>${escapeHtml(title)}</strong>
+    <span>${escapeHtml(message)}</span>
+    ${detailMarkup}
+  `;
+}
+
+function setChartFrameState(frame, kind, message) {
+  if (!frame) {
+    return;
+  }
+
+  frame.classList.remove('is-loading', 'is-empty', 'is-error');
+  delete frame.dataset.overlayText;
+
+  if (!kind) {
+    return;
+  }
+
+  frame.classList.add(`is-${kind}`);
+  frame.dataset.overlayText = message || '';
+}
+
+function clearChartFrameState(frame) {
+  setChartFrameState(frame, null, '');
+}
+
+function renderSkeletonSummaryCards() {
+  elements.summaryCards.innerHTML = Array.from({ length: 3 }, () => `
+    <article class="metric metric-skeleton" aria-busy="true">
+      <div class="skeleton skeleton-line skeleton-title"></div>
+      <div class="skeleton skeleton-value"></div>
+      <div class="skeleton skeleton-line skeleton-note"></div>
+    </article>
+  `).join('');
+}
+
+function renderSkeletonTransactions() {
+  elements.transactionsCount.textContent = 'Carregando...';
+  elements.transactionsList.innerHTML = Array.from({ length: 4 }, () => `
+    <article class="transaction-card transaction-skeleton" aria-busy="true">
+      <div class="transaction-copy">
+        <div class="skeleton skeleton-line skeleton-title"></div>
+        <div class="skeleton skeleton-line skeleton-note"></div>
+      </div>
+      <div class="transaction-side">
+        <div class="skeleton skeleton-line skeleton-amount"></div>
+        <div class="action-row">
+          <span class="skeleton skeleton-chip"></span>
+          <span class="skeleton skeleton-chip"></span>
+        </div>
+      </div>
+    </article>
+  `).join('');
+}
+
+function renderLoadingState() {
+  renderSkeletonSummaryCards();
+  renderSkeletonTransactions();
+  elements.filterSummary.textContent = 'Carregando filtros e dados do painel...';
+  elements.monthlyChartNote.textContent = 'Carregando grafico mensal...';
+  elements.categoryChartNote.textContent = 'Carregando grafico por categoria...';
+
+  destroyChart('monthly');
+  destroyChart('category');
+  setChartFrameState(elements.monthlyChart.parentElement, 'loading', 'Carregando grafico mensal...');
+  setChartFrameState(elements.categoryChart.parentElement, 'loading', 'Carregando grafico por categoria...');
+
+  setPageBanner('info', 'Carregando painel', 'Buscando dados da API e atualizando os graficos.');
+  renderConnectionStatus();
+}
+
+function renderConnectionStatus() {
+  if (state.loadState === 'loading') {
+    elements.apiStatus.innerHTML = `
+      <div class="status-chip warn">Carregando</div>
+      <p>Estamos buscando categorias, lancamentos e graficos.</p>
+      <p><strong>Base:</strong> ${escapeHtml(API_BASE_URL)}</p>
+      <p><strong>Resumo:</strong> sincronizando dados iniciais.</p>
+    `;
+    elements.sidebarStatus.textContent = 'Carregando dados...';
+    return;
+  }
+
+  if (state.loadState === 'error') {
+    elements.apiStatus.innerHTML = `
+      <div class="status-chip warn">Modo demonstracao</div>
+      <p>Conseguimos manter o painel funcionando, mas a API nao respondeu agora.</p>
+      <p><strong>Base:</strong> ${escapeHtml(API_BASE_URL)}</p>
+      <p><strong>Erro:</strong> ${escapeHtml(state.lastErrorMessage || 'Nao foi possivel validar a conexao.')}</p>
+      <p><strong>Base local:</strong> dados de demonstracao ativos.</p>
+    `;
+    elements.sidebarStatus.textContent = 'Demo ativa';
+    return;
+  }
+
+  const sourceLabel = state.source === 'api' ? 'API conectada' : 'Modo demonstracao';
+  const tone = state.source === 'api' ? 'ok' : 'warn';
+  const sourceMessage =
+    state.source === 'api'
+      ? `Ultima sincronizacao em ${state.lastSyncMessage}.`
+      : 'Os dados exibidos abaixo sao de demonstracao.';
+
   elements.apiStatus.innerHTML = `
-    <div class="status-chip ${tone}">${escapeHtml(state.online ? 'API conectada' : 'Modo demonstracao')}</div>
-    <p>${escapeHtml(message)}</p>
+    <div class="status-chip ${tone}">${escapeHtml(sourceLabel)}</div>
+    <p>${escapeHtml(sourceMessage)}</p>
     <p><strong>Base:</strong> ${escapeHtml(API_BASE_URL)}</p>
-    <p><strong>Lancamentos visiveis:</strong> ${getFilteredTransactions().length}</p>
+    <p><strong>Categoria</strong> ${state.categories.length} cadastradas</p>
+    <p><strong>Lancamentos</strong> ${state.transactions.length} registrados</p>
   `;
 
-  elements.sidebarStatus.textContent = state.online ? 'API online' : 'Dados de demonstracao';
+  elements.sidebarStatus.textContent = state.source === 'api' ? 'API online' : 'Demo ativa';
 }
 
 function setLoading(isLoading) {
   elements.refreshButton.disabled = isLoading;
-  elements.refreshButton.textContent = isLoading ? 'Atualizando...' : 'Atualizar dados';
+  elements.refreshButton.textContent = isLoading
+    ? state.transactions.length || state.categories.length
+      ? 'Atualizando...'
+      : 'Carregando...'
+    : 'Recarregar';
 }
 
 function setSaving(isSaving) {
@@ -381,33 +509,42 @@ function renderSummaryCards(transactions) {
     <article class="metric">
       <p class="metric-label">Receitas</p>
       <p class="metric-value amount-income">${formatCurrency(totals.income)}</p>
-      <p class="metric-help">${transactions.filter((transaction) => transaction.type === 'income').length} lancamentos visiveis</p>
+      <p class="metric-help">${transactions.filter((transaction) => transaction.type === 'income').length} lancamentos no periodo</p>
     </article>
     <article class="metric">
       <p class="metric-label">Despesas</p>
       <p class="metric-value amount-expense">${formatCurrency(totals.expenses)}</p>
-      <p class="metric-help">${transactions.filter((transaction) => transaction.type === 'expense').length} lancamentos visiveis</p>
+      <p class="metric-help">${transactions.filter((transaction) => transaction.type === 'expense').length} lancamentos no periodo</p>
     </article>
     <article class="metric">
       <p class="metric-label">Saldo</p>
       <p class="metric-value ${balanceTone}">${formatCurrency(totals.balance)}</p>
-      <p class="metric-help">Saldo calculado a partir dos filtros atuais</p>
+      <p class="metric-help">Saldo calculado com base nos filtros atuais</p>
     </article>
   `;
 }
 
 function renderMonthlyChart(transactions) {
   const series = buildMonthlySeries(transactions);
-  elements.monthlyChartNote.textContent = `Baseado em ${transactions.length} lancamentos visiveis.`;
+  const monthlyFrame = elements.monthlyChart.parentElement;
+
+  if (!transactions.length) {
+    destroyChart('monthly');
+    setChartFrameState(monthlyFrame, 'empty', 'Nenhum lancamento para montar o grafico mensal.');
+    elements.monthlyChartNote.textContent = 'Use os filtros ou crie um lancamento para ver a evolucao mensal.';
+    return;
+  }
 
   if (typeof Chart === 'undefined') {
     elements.monthlyChartNote.textContent =
       'Chart.js nao carregou. Recarregue a pagina quando a biblioteca estiver disponivel.';
     destroyChart('monthly');
+    setChartFrameState(monthlyFrame, 'error', 'Biblioteca de grafico indisponivel.');
     return;
   }
 
   ensureChartDefaults();
+  clearChartFrameState(monthlyFrame);
 
   const labels = series.map((item) => item.label);
   const incomeData = series.map((item) => item.income);
@@ -443,12 +580,21 @@ function renderMonthlyChart(transactions) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      layout: {
+        padding: {
+          top: 4,
+          right: 8,
+          bottom: 4,
+          left: 4
+        }
+      },
       interaction: {
         mode: 'index',
         intersect: false
       },
       plugins: {
         legend: {
+          display: false,
           position: 'top',
           align: 'start',
           labels: {
@@ -489,22 +635,30 @@ function renderMonthlyChart(transactions) {
     state.charts.monthly.data.datasets[0].data = incomeData;
     state.charts.monthly.data.datasets[1].data = expenseData;
     state.charts.monthly.update();
+    elements.monthlyChartNote.textContent = `Baseado em ${transactions.length} lancamentos filtrados.`;
     return;
   }
 
   state.charts.monthly = new Chart(elements.monthlyChart, chartConfig);
+  elements.monthlyChartNote.textContent = `Baseado em ${transactions.length} lancamentos filtrados.`;
 }
 
 function renderCategoryChart(transactions) {
   const categories = buildExpenseCategories(transactions);
-  elements.categoryChartNote.textContent = categories.length
-    ? `${categories.length} categorias com despesas no periodo filtrado.`
-    : 'Sem despesas no periodo selecionado.';
+  const categoryFrame = elements.categoryChart.parentElement;
+
+  if (!transactions.length) {
+    destroyChart('category');
+    setChartFrameState(categoryFrame, 'empty', 'Nenhuma despesa para mostrar neste periodo.');
+    elements.categoryChartNote.textContent = 'Crie despesas ou ajuste os filtros para ver a distribuicao por categoria.';
+    return;
+  }
 
   if (typeof Chart === 'undefined') {
     elements.categoryChartNote.textContent =
       'Chart.js nao carregou. Recarregue a pagina quando a biblioteca estiver disponivel.';
     destroyChart('category');
+    setChartFrameState(categoryFrame, 'error', 'Biblioteca de grafico indisponivel.');
     return;
   }
 
@@ -512,9 +666,12 @@ function renderCategoryChart(transactions) {
 
   if (!categories.length) {
     destroyChart('category');
+    setChartFrameState(categoryFrame, 'empty', 'Sem despesas para este periodo.');
+    elements.categoryChartNote.textContent = 'Nao ha despesas no periodo filtrado para distribuir por categoria.';
     return;
   }
 
+  clearChartFrameState(categoryFrame);
   const labels = categories.map((category) => category.name);
   const values = categories.map((category) => category.total);
   const colors = categories.map((category) => category.color);
@@ -576,22 +733,34 @@ function renderCategoryChart(transactions) {
     state.charts.category.data.datasets[0].backgroundColor = colors.map((color) => `${color}CC`);
     state.charts.category.data.datasets[0].borderColor = colors;
     state.charts.category.update();
+    elements.categoryChartNote.textContent = `${categories.length} categorias com despesas no periodo filtrado.`;
     return;
   }
 
   state.charts.category = new Chart(elements.categoryChart, chartConfig);
+  elements.categoryChartNote.textContent = `${categories.length} categorias com despesas no periodo filtrado.`;
 }
 
 function renderTransactions(transactions) {
   const visibleTransactions = transactions.slice(0, 8);
-
-  elements.transactionsCount.textContent = `${visibleTransactions.length} de ${transactions.length} itens`;
+  const totalItems = state.transactions.length;
+  const isFiltered = state.filters.startDate || state.filters.endDate || state.filters.categoryId;
+  elements.transactionsCount.textContent = `${visibleTransactions.length} de ${transactions.length} lancamentos`;
 
   if (!visibleTransactions.length) {
+    const emptyTitle = totalItems === 0
+      ? 'Ainda nao existem lancamentos'
+      : 'Nenhum lancamento neste filtro';
+    const emptyNote = totalItems === 0
+      ? 'Use o formulario ao lado para registrar sua primeira receita ou despesa.'
+      : isFiltered
+        ? 'Altere o periodo ou a categoria para ver mais resultados.'
+        : 'Nao ha lancamentos para mostrar agora.';
+
     elements.transactionsList.innerHTML = `
       <div class="empty-state">
-        <strong>Nenhum lancamento encontrado</strong>
-        <p class="empty-note">Ajuste os filtros ou crie um novo lancamento no formulario ao lado.</p>
+        <strong>${escapeHtml(emptyTitle)}</strong>
+        <p class="empty-note">${escapeHtml(emptyNote)}</p>
       </div>
     `;
     return;
@@ -655,7 +824,7 @@ function renderFilterSummary(transactions) {
   }
 
   if (!pieces.length) {
-    pieces.push('sem filtros ativos');
+    pieces.push('nenhum filtro ativo');
   }
 
   elements.filterSummary.textContent = `${transactions.length} lancamentos visiveis, ${pieces.join(' • ')}.`;
@@ -731,8 +900,8 @@ function syncFormMode() {
   elements.cancelEditButton.hidden = !isEditing;
   elements.saveTransactionButton.textContent = isEditing ? 'Atualizar lancamento' : 'Salvar lancamento';
   elements.formHint.textContent = isEditing
-    ? 'Ajuste os campos e salve para atualizar o lancamento selecionado.'
-    : 'Preencha o formulario para criar um lancamento.';
+    ? 'Ajuste os campos e confirme para atualizar o lancamento.'
+    : 'Preencha os campos para registrar uma receita ou despesa.';
 }
 
 function resetFormDefaults() {
@@ -767,6 +936,28 @@ function getTransactionById(id) {
   return state.transactions.find((transaction) => Number(transaction.id) === Number(id));
 }
 
+function setActiveNav(navKey) {
+  state.activeNav = navKey;
+
+  elements.navItems.forEach((item) => {
+    const isActive = item.dataset.nav === navKey;
+    item.classList.toggle('active', isActive);
+    if (isActive) {
+      item.setAttribute('aria-current', 'page');
+    } else {
+      item.removeAttribute('aria-current');
+    }
+  });
+}
+
+function scrollToPanel(panel) {
+  if (!panel) {
+    return;
+  }
+
+  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 function renderDashboard() {
   const filteredTransactions = sortTransactions(getFilteredTransactions());
 
@@ -775,12 +966,12 @@ function renderDashboard() {
   renderCategoryChart(filteredTransactions);
   renderTransactions(filteredTransactions);
   renderFilterSummary(filteredTransactions);
-  setStatus(
-    state.online
-      ? `Ultima sincronizacao em ${state.lastSyncMessage}.`
-      : 'A interface esta usando dados de demonstracao ate a API ficar disponivel.',
-    state.online ? 'ok' : 'warn'
-  );
+
+  if (state.loadState === 'ready') {
+    setPageBanner('', '');
+  }
+
+  renderConnectionStatus();
 }
 
 async function apiRequest(path, options = {}) {
@@ -812,7 +1003,9 @@ async function apiRequest(path, options = {}) {
 }
 
 async function loadData() {
+  state.loadState = 'loading';
   setLoading(true);
+  renderLoadingState();
 
   try {
     const [health, categories, transactions] = await Promise.all([
@@ -829,15 +1022,29 @@ async function loadData() {
     state.lastSyncMessage = health?.timestamp
       ? new Date(health.timestamp).toLocaleString('pt-BR')
       : new Date().toLocaleString('pt-BR');
+    state.source = 'api';
+    state.online = true;
+    state.loadState = 'ready';
+    state.lastErrorMessage = '';
   } catch (error) {
     const fallback = buildFallbackData();
 
     console.error(error);
 
     state.online = false;
+    state.source = 'demo';
+    state.loadState = 'error';
+    state.lastErrorMessage = error?.message || 'Nao foi possivel carregar a API.';
     state.categories = fallback.categories;
     state.transactions = fallback.transactions.map(normalizeTransactionForView);
     state.lastSyncMessage = new Date(fallback.health.timestamp).toLocaleString('pt-BR');
+
+    setPageBanner(
+      'warn',
+      'API indisponivel',
+      'Estamos mostrando dados de demonstracao para continuar a navegacao.',
+      state.lastErrorMessage
+    );
   } finally {
     setLoading(false);
   }
@@ -956,6 +1163,37 @@ function bindEvents() {
   elements.cancelEditButton.addEventListener('click', clearEditMode);
   elements.transactionForm.addEventListener('submit', saveTransaction);
 
+  elements.navItems.forEach((item) => {
+    item.addEventListener('click', () => {
+      const navKey = item.dataset.nav;
+
+      if (!navKey) {
+        return;
+      }
+
+      setActiveNav(navKey);
+      clearEditMode();
+
+      if (navKey === 'dashboard') {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+
+      if (navKey === 'income' || navKey === 'expense') {
+        elements.transactionType.value = navKey;
+        syncFormCategoryOptions();
+        syncFormMode();
+        scrollToPanel(elements.transactionFormPanel);
+        elements.transactionDescription.focus();
+        return;
+      }
+
+      if (navKey === 'categories') {
+        scrollToPanel(elements.categoryPanel);
+      }
+    });
+  });
+
   elements.transactionsList.addEventListener('click', (event) => {
     const button = event.target.closest('button[data-action]');
 
@@ -982,6 +1220,7 @@ function bindEvents() {
 
 function initialize() {
   bindEvents();
+  setActiveNav('dashboard');
   resetFormDefaults();
   loadData();
 }
