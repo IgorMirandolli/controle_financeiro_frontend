@@ -9,9 +9,17 @@ Dashboard responsivo para acompanhar receitas, despesas, saldo e categorias. A i
 
 ## Interface
 
-![Dashboard do Controle Financeiro](./docs/images/dashboard.png)
+### Resumo financeiro e filtros
 
-![Layout responsivo](./docs/images/responsivo.png)
+![Resumo financeiro e filtros](./docs/images/controlefinanceiro.png)
+
+### Lancamentos e grafico mensal
+
+![Formulario de lancamentos e grafico mensal](./docs/images/controlefinanceiro2.png)
+
+### Transacoes e despesas por categoria
+
+![Lista de transacoes e grafico por categoria](./docs/images/controlefinanceiro3.png)
 
 ## Funcionalidades
 
